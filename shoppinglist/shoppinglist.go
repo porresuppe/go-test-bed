@@ -20,13 +20,11 @@ var shoppingList []shoppingListItem
 func itemsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		// set the Content-Type header.
 		w.Header().Set("Content-Type", "application/json")
 
 		enc := json.NewEncoder(w)
 		err := enc.Encode(shoppingList)
 		if err != nil {
-			// if encoding fails, create an error page with code 500.
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	case "POST":
@@ -70,7 +68,6 @@ func totalPriceHandler(w http.ResponseWriter, r *http.Request) {
 		totalPrice += v.Price
 	}
 
-	// set the Content-Type header.
 	w.Header().Set("Content-Type", "application/json")
 
 	enc := json.NewEncoder(w)
@@ -78,7 +75,6 @@ func totalPriceHandler(w http.ResponseWriter, r *http.Request) {
 		TotalPrice float64 `json:"total price"`
 	}{totalPrice})
 	if err != nil {
-		// if encoding fails, create an error page with code 500.
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -94,25 +90,21 @@ func singleSupermarketListHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// set the Content-Type header.
 	w.Header().Set("Content-Type", "application/json")
 
 	enc := json.NewEncoder(w)
 	err := enc.Encode(singleSupermarketList)
 	if err != nil {
-		// if encoding fails, create an error page with code 500.
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func main() {
 	r := mux.NewRouter()
-	// Routes consist of a path and a handler function.
 	r.HandleFunc("/items", itemsHandler).Methods("GET", "POST", "DELETE")
 	r.HandleFunc("/items/{id:[0-9]+}", itemHandler).Methods("DELETE")
 	r.HandleFunc("/items/totprice", totalPriceHandler).Methods("GET")
 	r.HandleFunc("/items/{supermarket}", singleSupermarketListHandler).Methods("GET")
 
-	// Bind to a port and pass our router in
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
