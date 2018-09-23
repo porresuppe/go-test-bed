@@ -1,0 +1,50 @@
+
+POST http://localhost:8080/items HTTP/1.1
+Content-Type: application/json
+
+{
+    "name": "milk",
+    "supermarket" : "netto",
+    "price" : 10.5
+}
+
+###
+
+POST http://localhost:8080/items HTTP/1.1
+Content-Type: application/json
+
+{
+    "name": "cheese",
+    "supermarket" : "rema 1000",
+    "price" : 40
+}
+
+###
+
+POST http://localhost:8080/items HTTP/1.1
+Content-Type: application/json
+
+{
+    "name": "beer",
+    "supermarket" : "netto",
+    "price" : 8
+}
+
+###
+GET http://localhost:8080/items HTTP/1.1
+
+###
+
+DELETE http://localhost:8080/items HTTP/1.1
+
+###
+
+DELETE http://localhost:8080/items/1 HTTP/1.1
+
+###
+
+GET http://localhost:8080/items/totprice HTTP/1.1
+
+###
+
+GET http://localhost:8080/items/netto HTTP/1.1
