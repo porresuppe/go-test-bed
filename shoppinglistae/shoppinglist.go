@@ -128,7 +128,9 @@ func singleSupermarketListHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := appengine.NewContext(r)
 
-	q := datastore.NewQuery("shoppingListItem")
+	q := datastore.
+		NewQuery("shoppingListItem").
+		Filter("Supermarket = ", supermarket)
 	var shoppingList []shoppingListItem
 	_, err := q.GetAll(ctx, &shoppingList)
 	if err != nil {
@@ -136,17 +138,10 @@ func singleSupermarketListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var singleSupermarketList []shoppingListItem
-	for _, v := range shoppingList {
-		if v.Supermarket == supermarket {
-			singleSupermarketList = append(singleSupermarketList, v)
-		}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 
 	enc := json.NewEncoder(w)
-	err = enc.Encode(singleSupermarketList)
+	err = enc.Encode(shoppingList)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
