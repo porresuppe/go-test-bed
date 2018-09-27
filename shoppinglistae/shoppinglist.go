@@ -1,20 +1,35 @@
 package app
 
 import (
+	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
 
+	"cloud.google.com/go/storage"
 	"github.com/gorilla/mux"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 )
+
+type shoppingListItemPost struct {
+	Name        string  `json:"name"`
+	Supermarket string  `json:"supermarket"`
+	Price       float64 `json:"price"`
+	Content     string  `json:"content"`
+}
 
 type shoppingListItem struct {
 	ID          int64   `json:"id"`
 	Name        string  `json:"name"`
 	Supermarket string  `json:"supermarket"`
 	Price       float64 `json:"price"`
+	ImageURL    string  `json:"imageurl"`
 }
 
 func itemsHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,19 +53,26 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	case "POST":
-		var item shoppingListItem
+		var pItem shoppingListItemPost
 
 		dec := json.NewDecoder(r.Body)
-		err := dec.Decode(&item)
+		err := dec.Decode(&pItem)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
+		item := shoppingListItem{Name: pItem.Name, Supermarket: pItem.Supermarket, Price: pItem.Price}
+
 		// https://cloud.google.com/appengine/docs/standard/go/datastore/entities#Go_Assigning_identifiers
 		l, _, err := datastore.AllocateIDs(ctx, "shoppingListItem", nil, 1)
 		key := datastore.NewKey(ctx, "shoppingListItem", "", l, nil)
 		item.ID = key.IntID()
+		item.ImageURL, err = uploadFile(ctx, &pItem, &item)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		key, err = datastore.Put(ctx, key, &item)
 		if err != nil {
@@ -74,6 +96,38 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "MethodNotAllowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func uploadFile(ctx context.Context, pItem *shoppingListItemPost, item *shoppingListItem) (url string, err error) {
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bucket := "ShoppingListImageBucket"
+	name := fmt.Sprintf("%d-%s", item.ID, item.Name)
+	wc := client.Bucket(bucket).Object(name).NewWriter(ctx)
+
+	// Warning: storage.AllUsers gives public read access to anyone.
+	wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
+	wc.ContentType = "image/jpg"
+
+	// Entries are immutable, be aggressive about caching (1 day).
+	wc.CacheControl = "public, max-age=86400"
+
+	b, err := base64.StdEncoding.DecodeString(pItem.Content)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err = io.Copy(wc, bytes.NewReader(b)); err != nil {
+		return "", err
+	}
+	if err := wc.Close(); err != nil {
+		return "", err
+	}
+
+	const publicURL = "https://storage.googleapis.com/%s/%s"
+	return fmt.Sprintf(publicURL, bucket, name), nil
 }
 
 func itemHandler(w http.ResponseWriter, r *http.Request) {
