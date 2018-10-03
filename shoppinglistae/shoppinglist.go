@@ -98,12 +98,16 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// To use this locally (SDK):
+// 1. Run: gcloud beta auth application-default login (more here http://researchtw.blogspot.com/2016/05/accessing-google-cloud-storage-with-go.html)
+// 2. Create a bucket with Google Cloud Console
+// 3. Test code
 func uploadFile(ctx context.Context, pItem *shoppingListItemPost, item *shoppingListItem) (url string, err error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	bucket := "ShoppingListImageBucket"
+	bucket := "shoppinglist-image-bucket"
 	name := fmt.Sprintf("%d-%s", item.ID, item.Name)
 	wc := client.Bucket(bucket).Object(name).NewWriter(ctx)
 
