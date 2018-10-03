@@ -1,9 +1,12 @@
+// Check race conditions with go run -race urlchecker.go
+// TODO: Remove mutex - see https://gobyexample.com/stateful-goroutines
 package main
 
 import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -21,8 +24,9 @@ func (u urlState) String() string {
 	return fmt.Sprintf(" returned %d (took %f sec)", u.statusCode, u.latency)
 }
 
-func main() {
+var mutex = &sync.Mutex{}
 
+func main() {
 	urls := []string{"http://127.0.0.1:8080/hello/kalle", "http://127.0.0.1:8080/hello/anker"}
 	urlcheckers := 2
 	state = make(map[string]urlState)
@@ -48,7 +52,9 @@ func main() {
 func printState() {
 	for {
 		time.Sleep(statusInterval * time.Second)
+		mutex.Lock()
 		fmt.Printf("%v\n", state)
+		mutex.Unlock()
 	}
 }
 
@@ -70,6 +76,8 @@ func checkURL(ch chan string) {
 		statusCode = res.StatusCode
 	}
 	elapsed := time.Since(start)
+	mutex.Lock()
 	state[url] = urlState{statusCode, elapsed.Seconds()}
+	mutex.Unlock()
 	log.Printf("Done calling %s\n", url)
 }
