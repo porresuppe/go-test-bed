@@ -1,83 +1,97 @@
 // Check race conditions with go run -race urlchecker.go
-// TODO: Remove mutex - see https://gobyexample.com/stateful-goroutines
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
+	"os"
 	"time"
 )
 
 const checkInterval = 3
 const statusInterval = 10
 
-var state map[string]urlState
-
 type urlState struct {
+	url        string
 	statusCode int
 	latency    float64
 }
 
 func (u urlState) String() string {
-	return fmt.Sprintf(" returned %d (took %f sec)", u.statusCode, u.latency)
+	return fmt.Sprintf("Call to %s returned %d (took %f sec)", u.url, u.statusCode, u.latency)
 }
 
-var mutex = &sync.Mutex{}
+func printState(stateChannel chan urlState) {
+	state := make(map[string]urlState)
+	start := time.Now()
+	for {
+		us := <-stateChannel
+		state[us.url] = us
+
+		delta := time.Since(start)
+		if delta > statusInterval*time.Second {
+			start = time.Now()
+			fmt.Printf("%v\n", state)
+		}
+	}
+}
+
+func timeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	log.Printf("%s ran for %s", name, elapsed)
+}
+
+func checkURL(url string, stateChannel chan urlState) {
+	start := time.Now()
+	for {
+		delta := time.Since(start)
+		if delta < checkInterval*time.Second {
+			continue
+		}
+		start = time.Now()
+
+		log.Printf("Calling: %s\n", url)
+		req, err := http.NewRequest("HEAD", url, nil)
+		if err != nil {
+			log.Fatalf("could not create request: %v", err)
+		}
+		client := http.DefaultClient
+
+		statusCode := 503
+
+		startOfCall := time.Now()
+		res, err := client.Do(req)
+		if err == nil {
+			statusCode = res.StatusCode
+		}
+		elapsed := time.Since(startOfCall)
+		stateChannel <- urlState{url, statusCode, elapsed.Seconds()}
+	}
+}
 
 func main() {
+	defer timeTrack(time.Now(), "urlchecker")
 	urls := []string{"http://127.0.0.1:8080/hello/kalle", "http://127.0.0.1:8080/hello/anker"}
-	urlcheckers := 2
-	state = make(map[string]urlState)
-	ch := make(chan string)
 
-	go printState()
+	stateChannel := make(chan urlState)
 
+	go printState(stateChannel)
+
+	for _, v := range urls {
+		go checkURL(v, stateChannel)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
 	for {
-		for _, v := range urls {
-			go func(url string) {
-				ch <- url
-			}(v)
+		char, _, err := reader.ReadRune()
+
+		if err != nil {
+			fmt.Println(err)
 		}
-
-		for i := 1; i < urlcheckers; i++ {
-			go checkURL(ch)
+		if char == 'q' {
+			break
 		}
-
-		time.Sleep(1 * time.Second) // Slow down main loop
 	}
-}
-
-func printState() {
-	for {
-		time.Sleep(statusInterval * time.Second)
-		mutex.Lock()
-		fmt.Printf("%v\n", state)
-		mutex.Unlock()
-	}
-}
-
-func checkURL(ch chan string) {
-	time.Sleep(checkInterval * time.Second)
-	url := <-ch
-	log.Printf("Calling: %s\n", url)
-	req, err := http.NewRequest("HEAD", url, nil)
-	if err != nil {
-		log.Fatalf("could not create request: %v", err)
-	}
-	client := http.DefaultClient
-
-	statusCode := 503
-
-	start := time.Now()
-	res, err := client.Do(req)
-	if err == nil {
-		statusCode = res.StatusCode
-	}
-	elapsed := time.Since(start)
-	mutex.Lock()
-	state[url] = urlState{statusCode, elapsed.Seconds()}
-	mutex.Unlock()
-	log.Printf("Done calling %s\n", url)
 }
