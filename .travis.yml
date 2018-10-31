@@ -1,6 +1,7 @@
 language: go
 sudo: false
 before_script:
+  - cd shoppinglist
   - go vet ./...
 script: cd shoppinglist
 install:
